@@ -1,0 +1,307 @@
+
+from flask import Flask, render_template, request
+from cipher.caesar import CaesarCipher
+from cipher.vigenere import VigenereCipher
+from cipher.railfence import RailFenceCipher
+from cipher.playfair import PlayFairCipher
+from cipher.transposition import TranspositionCipher
+
+app = Flask(__name__)
+
+# Inline Vigenère Cipher implementation
+def vigenere_encrypt_text(text, key):
+    """Temporary Vigenère encryption within app.py."""
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    text = ''.join(c.upper() for c in text if c.isalpha())
+    key = ''.join(c.upper() for c in key if c.isalpha())
+    if not key:
+        return "Lỗi: Khóa phải chứa ít nhất một chữ cái."
+    if not text:
+        return "Lỗi: Văn bản gốc không chứa chữ cái hợp lệ."
+    
+    extended_key = (key * (len(text) // len(key) + 1))[:len(text)]
+    ciphertext = ''
+    
+    for p, k in zip(text, extended_key):
+        p_idx = alphabet.index(p)
+        k_idx = alphabet.index(k)
+        c_idx = (p_idx + k_idx) % 26
+        ciphertext += alphabet[c_idx]
+    
+    return ciphertext
+
+def vigenere_decrypt_text(text, key):
+    """Temporary Vigenère decryption within app.py."""
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    text = ''.join(c.upper() for c in text if c.isalpha())
+    key = ''.join(c.upper() for c in key if c.isalpha())
+    if not key:
+        return "Lỗi: Khóa phải chứa ít nhất một chữ cái."
+    if not text:
+        return "Lỗi: Văn bản mã hóa không chứa chữ cái hợp lệ."
+    
+    extended_key = (key * (len(text) // len(key) + 1))[:len(text)]
+    plaintext = ''
+    
+    for c, k in zip(text, extended_key):
+        c_idx = alphabet.index(c)
+        k_idx = alphabet.index(k)
+        p_idx = (c_idx - k_idx) % 26
+        plaintext += alphabet[p_idx]
+    
+    return plaintext
+
+# Inline Rail Fence Cipher implementation
+def railfence_encrypt_text(text, key):
+    """Temporary Rail Fence encryption within app.py."""
+    if not text:
+        return "Lỗi: Văn bản gốc không chứa ký tự hợp lệ."
+    if not isinstance(key, int) or key < 2:
+        return "Lỗi: Số hàng phải là số nguyên lớn hơn hoặc bằng 2."
+    
+    # Clean text: keep only alphanumeric characters
+    text = ''.join(c for c in text.upper() if c.isalnum())
+    if not text:
+        return "Lỗi: Văn bản gốc không chứa ký tự hợp lệ."
+    
+    # Initialize rails
+    rails = [''] * key
+    row = 0
+    direction = 1  # 1 for down, -1 for up
+    
+    # Place characters in zigzag pattern
+    for char in text:
+        rails[row] += char
+        row += direction
+        if row == 0 or row == key - 1:
+            direction *= -1
+    
+    # Combine rails to form ciphertext
+    return ''.join(rails)
+
+def railfence_decrypt_text(text, key):
+    """Temporary Rail Fence decryption within app.py."""
+    if not text:
+        return "Lỗi: Văn bản mã hóa không chứa ký tự hợp lệ."
+    if not isinstance(key, int) or key < 2:
+        return "Lỗi: Số hàng phải là số nguyên lớn hơn hoặc bằng 2."
+    
+    # Clean text: keep only alphanumeric characters
+    text = ''.join(c for c in text.upper() if c.isalnum())
+    if not text:
+        return "Lỗi: Văn bản mã hóa không chứa ký tự hợp lệ."
+    
+    # Create rail matrix template
+    n = len(text)
+    rail_lengths = [0] * key
+    row = 0
+    direction = 1
+    
+    # Count characters per rail
+    for _ in range(n):
+        rail_lengths[row] += 1
+        row += direction
+        if row == 0 or row == key - 1:
+            direction *= -1
+    
+    # Split ciphertext into rails
+    rails = []
+    start = 0
+    for length in rail_lengths:
+        rails.append(text[start:start + length])
+        start += length
+    
+    # Reconstruct plaintext
+    result = []
+    row = 0
+    direction = 1
+    rail_idx = [0] * key  # Track index in each rail
+    
+    for _ in range(n):
+        result.append(rails[row][rail_idx[row]])
+        rail_idx[row] += 1
+        row += direction
+        if row == 0 or row == key - 1:
+            direction *= -1
+    
+    return ''.join(result)
+
+# Route for homepage
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+# Routes for Caesar Cipher
+@app.route('/caesar')
+def caesar():
+    return render_template('caesar.html')
+
+@app.route('/encrypt', methods=['POST'])
+def caesar_encrypt():
+    text = request.form['inputPlainText']
+    key_input = request.form['inputKeyPlain']
+    
+    try:
+        key = int(key_input)
+        if key < 0:
+            return "Lỗi: Khóa phải là số nguyên không âm.<br/><a href='/caesar'>Quay lại</a>"
+    except ValueError:
+        return "Lỗi: Khóa phải là một số nguyên hợp lệ.<br/><a href='/caesar'>Quay lại</a>"
+    
+    caesar = CaesarCipher()
+    encrypted_text = caesar.encrypt_text(text, key)
+    return f"Văn bản gốc: {text}<br/>Khóa: {key}<br/>Văn bản mã hóa: {encrypted_text}<br/><a href='/caesar'>Quay lại</a>"
+
+@app.route('/decrypt', methods=['POST'])
+def caesar_decrypt():
+    text = request.form['inputCipherText']
+    key_input = request.form['inputKeyCipher']
+    
+    try:
+        key = int(key_input)
+        if key < 0:
+            return "Lỗi: Khóa phải là số nguyên không âm.<br/><a href='/caesar'>Quay lại</a>"
+    except ValueError:
+        return "Lỗi: Khóa phải là một số nguyên hợp lệ.<br/><a href='/caesar'>Quay lại</a>"
+    
+    caesar = CaesarCipher()
+    decrypted_text = caesar.decrypt_text(text, key)
+    return f"Văn bản mã hóa: {text}<br/>Khóa: {key}<br/>Văn bản giải mã: {decrypted_text}<br/><a href='/caesar'>Quay lại</a>"
+
+# Routes for Vigenère Cipher
+@app.route('/vigenere')
+def vigenere():
+    return render_template('vigenere.html')
+
+@app.route('/vigenere_encrypt', methods=['POST'])
+def vigenere_encrypt():
+    text = request.form['inputPlainText']
+    key = request.form['inputKeyPlain']
+    
+    try:
+        vigenere = VigenereCipher()
+        encrypted_text = vigenere.encrypt_text(text, key)
+    except AttributeError:
+        encrypted_text = vigenere_encrypt_text(text, key)
+    
+    return f"Văn bản gốc: {text}<br/>Khóa: {key}<br/>Văn bản mã hóa: {encrypted_text}<br/><a href='/vigenere'>Quay lại</a>"
+
+@app.route('/vigenere_decrypt', methods=['POST'])
+def vigenere_decrypt():
+    text = request.form['inputCipherText']
+    key = request.form['inputKeyCipher']
+    
+    try:
+        vigenere = VigenereCipher()
+        decrypted_text = vigenere.decrypt_text(text, key)
+    except AttributeError:
+        decrypted_text = vigenere_decrypt_text(text, key)
+    
+    return f"Văn bản mã hóa: {text}<br/>Khóa: {key}<br/>Văn bản giải mã: {decrypted_text}<br/><a href='/vigenere'>Quay lại</a>"
+
+# Routes for Rail Fence Cipher
+@app.route('/railfence')
+def railfence():
+    return render_template('railfence.html')
+
+@app.route('/railfence_encrypt', methods=['POST'])
+def railfence_encrypt():
+    text = request.form['inputPlainText']
+    key_input = request.form['inputKeyPlain']
+    
+    try:
+        key = int(key_input)
+        if key < 2:
+            return "Lỗi: Số hàng phải là số nguyên lớn hơn hoặc bằng 2.<br/><a href='/railfence'>Quay lại</a>"
+    except ValueError:
+        return "Lỗi: Số hàng phải là một số nguyên hợp lệ.<br/><a href='/railfence'>Quay lại</a>"
+    
+    try:
+        railfence = RailFenceCipher()
+        encrypted_text = railfence.encrypt_text(text, key)
+    except AttributeError:
+        encrypted_text = railfence_encrypt_text(text, key)
+    
+    return f"Văn bản gốc: {text}<br/>Số hàng: {key}<br/>Văn bản mã hóa: {encrypted_text}<br/><a href='/railfence'>Quay lại</a>"
+
+@app.route('/railfence_decrypt', methods=['POST'])
+def railfence_decrypt():
+    text = request.form['inputCipherText']
+    key_input = request.form['inputKeyCipher']
+    
+    try:
+        key = int(key_input)
+        if key < 2:
+            return "Lỗi: Số hàng phải là số nguyên lớn hơn hoặc bằng 2.<br/><a href='/railfence'>Quay lại</a>"
+    except ValueError:
+        return "Lỗi: Số hàng phải là một số nguyên hợp lệ.<br/><a href='/railfence'>Quay lại</a>"
+    
+    try:
+        railfence = RailFenceCipher()
+        decrypted_text = railfence.decrypt_text(text, key)
+    except AttributeError:
+        decrypted_text = railfence_decrypt_text(text, key)
+    
+    return f"Văn bản mã hóa: {text}<br/>Số hàng: {key}<br/>Văn bản giải mã: {decrypted_text}<br/><a href='/railfence'>Quay lại</a>"
+
+# Routes for Playfair Cipher
+@app.route('/playfair')
+def playfair():
+    return render_template('playfair.html')
+
+@app.route('/playfair_encrypt', methods=['POST'])
+def playfair_encrypt():
+    text = request.form['inputPlainText']
+    key = request.form['inputKeyPlain']
+    playfair = PlayFairCipher()
+    encrypted_text = playfair.encrypt_text(text, key)
+    return f"Văn bản gốc: {text}<br/>Khóa: {key}<br/>Văn bản mã hóa: {encrypted_text}<br/><a href='/playfair'>Quay lại</a>"
+
+@app.route('/playfair_decrypt', methods=['POST'])
+def playfair_decrypt():
+    text = request.form['inputCipherText']
+    key = request.form['inputKeyCipher']
+    playfair = PlayFairCipher()
+    decrypted_text = playfair.decrypt_text(text, key)
+    return f"Văn bản mã hóa: {text}<br/>Khóa: {key}<br/>Văn bản giải mã: {decrypted_text}<br/><a href='/playfair'>Quay lại</a>"
+
+# Routes for Transposition Cipher
+@app.route('/transposition')
+def transposition():
+    return render_template('transposition.html')
+
+@app.route('/transposition_encrypt', methods=['POST'])
+def transposition_encrypt():
+    text = request.form['inputPlainText']
+    key_input = request.form['inputKeyPlain']
+    
+    try:
+        key = int(key_input)
+        if key < 2:
+            return "Lỗi: Số cột phải là số nguyên lớn hơn hoặc bằng 2.<br/><a href='/transposition'>Quay lại</a>"
+    except ValueError:
+        return "Lỗi: Số cột phải là một số nguyên hợp lệ.<br/><a href='/transposition'>Quay lại</a>"
+    
+    transposition = TranspositionCipher()
+    encrypted_text = transposition.encrypt_text(text, key)
+    return f"Văn bản gốc: {text}<br/>Số cột: {key}<br/>Văn bản mã hóa: {encrypted_text}<br/><a href='/transposition'>Quay lại</a>"
+
+@app.route('/transposition_decrypt', methods=['POST'])
+def transposition_decrypt():
+    text = request.form['inputCipherText']
+    key_input = request.form['inputKeyCipher']
+    
+    try:
+        key = int(key_input)
+        if key < 2:
+            return "Lỗi: Số cột phải là số nguyên lớn hơn hoặc bằng 2.<br/><a href='/transposition'>Quay lại</a>"
+    except ValueError:
+        return "Lỗi: Số cột phải là một số nguyên hợp lệ.<br/><a href='/transposition'>Quay lại</a>"
+    
+    transposition = TranspositionCipher()
+    decrypted_text = transposition.decrypt_text(text, key)
+    return f"Văn bản mã hóa: {text}<br/>Số cột: {key}<br/>Văn bản giải mã: {decrypted_text}<br/><a href='/transposition'>Quay lại</a>"
+
+# Main function
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5050, debug=True)

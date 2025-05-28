@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./ex01",
+        "./ex01"
+    ]
+}
